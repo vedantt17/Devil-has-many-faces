@@ -1,0 +1,33 @@
+
+# Node
+node_modules/
+dist/
+build/
+.env.local
+.env.production
+npm-debug.log*
+yarn-error.log*
+.pnp
+.pnp.js
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+data/raw/
+data/processed/
+*.db
+*.sqlite
+chroma_db/
