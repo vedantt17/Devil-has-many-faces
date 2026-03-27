@@ -31,3 +31,5 @@ data/processed/
 *.db
 *.sqlite
 chroma_db/
+
+.venv/
