@@ -6,7 +6,7 @@ import csv
 from datetime import date
 
 BASE_URL = "https://www.justice.gov"
-PAGE_URL = "https://www.justice.gov/epstein/doj-disclosures/court-records-united-states-v-maxwell-no-120-cr-00330-sdny-2020"
+MAIN_PAGE = "https://www.justice.gov/epstein/doj-disclosures"
 SAVE_DIR = "data/raw/epstein"
 SOURCES_FILE = "data/sources.csv"
 
@@ -14,29 +14,36 @@ os.makedirs(SAVE_DIR, exist_ok=True)
 
 session = requests.Session()
 session.headers.update({"User-Agent": "Mozilla/5.0"})
+session.cookies.set("justiceGovAgeVerified", "true", domain="www.justice.gov")
 
-# Age verification cookie
-session.cookies.set("age_verified", "1", domain="www.justice.gov")
-session.cookies.set("doj_age_gate", "true", domain="www.justice.gov")
+def get_pdf_links_from_page(url):
+    try:
+        r = session.get(url, timeout=30)
+        soup = BeautifulSoup(r.text, "html.parser")
+        links = []
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            if ".pdf" in href.lower():
+                full = href if href.startswith("http") else BASE_URL + href
+                links.append(full)
+        return links
+    except Exception as e:
+        print(f"  Error fetching {url}: {e}")
+        return []
 
-print("Fetching Maxwell case page...")
-response = session.get(PAGE_URL)
-soup = BeautifulSoup(response.text, "html.parser")
+print("Fetching main DOJ disclosures page...")
+r = session.get(MAIN_PAGE)
+soup = BeautifulSoup(r.text, "html.parser")
 
-pdf_links = []
+court_pages = []
 for a in soup.find_all("a", href=True):
     href = a["href"]
-    if ".pdf" in href.lower():
-        full_url = href if href.startswith("http") else BASE_URL + href
-        pdf_links.append(full_url)
+    if "/epstein/doj-disclosures/" in href and "data-set" not in href:
+        full = href if href.startswith("http") else BASE_URL + href
+        if full not in court_pages:
+            court_pages.append(full)
 
-print(f"Found {len(pdf_links)} PDF links.")
-
-if len(pdf_links) == 0:
-    print("No PDFs found. The age gate may be blocking access.")
-    print("Response preview:")
-    print(response.text[:500])
-    exit()
+print(f"Found {len(court_pages)} court record pages.")
 
 existing = set()
 if os.path.exists(SOURCES_FILE):
@@ -49,36 +56,43 @@ if os.path.exists(SOURCES_FILE):
 
 downloaded = 0
 skipped = 0
+errors = 0
 
 with open(SOURCES_FILE, "a", newline="") as csvfile:
     writer = csv.writer(csvfile)
-    for url in pdf_links:
-        filename = url.split("/")[-1].split("?")[0]
-        filename = requests.utils.unquote(filename)
 
-        if filename in existing:
-            skipped += 1
-            continue
+    for page_url in court_pages:
+        print(f"\nScraping: {page_url}")
+        pdf_links = get_pdf_links_from_page(page_url)
+        print(f"  Found {len(pdf_links)} PDFs")
 
-        save_path = os.path.join(SAVE_DIR, filename)
-        if os.path.exists(save_path):
-            skipped += 1
-            continue
+        for url in pdf_links:
+            filename = requests.utils.unquote(url.split("/")[-1].split("?")[0])
 
-        try:
-            print(f"  Downloading: {filename}")
-            r = session.get(url, timeout=30)
-            r.raise_for_status()
+            if filename in existing:
+                skipped += 1
+                continue
 
-            with open(save_path, "wb") as f:
-                f.write(r.content)
+            save_path = os.path.join(SAVE_DIR, filename)
+            if os.path.exists(save_path):
+                skipped += 1
+                continue
 
-            writer.writerow(["epstein", filename, url, date.today().isoformat(), 0])
-            existing.add(filename)
-            downloaded += 1
-            time.sleep(0.75)
+            try:
+                print(f"  Downloading: {filename}")
+                resp = session.get(url, timeout=30)
+                resp.raise_for_status()
 
-        except Exception as e:
-            print(f"  ERROR: {filename}: {e}")
+                with open(save_path, "wb") as f:
+                    f.write(resp.content)
 
-print(f"\nDone. Downloaded: {downloaded}, Skipped: {skipped}")
+                writer.writerow(["epstein", filename, url, date.today().isoformat(), 0])
+                existing.add(filename)
+                downloaded += 1
+                time.sleep(0.5)
+
+            except Exception as e:
+                print(f"  ERROR: {filename}: {e}")
+                errors += 1
+
+print(f"\nAll done. Downloaded: {downloaded}, Skipped: {skipped}, Errors: {errors}")
