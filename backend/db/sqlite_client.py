@@ -1,10 +1,15 @@
+# Written by V
 import sqlite3
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+load_dotenv(os.path.join(ROOT_DIR, ".env"))
 
-SQLITE_PATH = os.getenv("SQLITE_PATH", "./data/dmf.db")
+SQLITE_PATH = os.getenv("SQLITE_PATH", os.path.join(ROOT_DIR, "data", "dmf.db"))
+
+if not os.path.isabs(SQLITE_PATH):
+    SQLITE_PATH = os.path.join(ROOT_DIR, SQLITE_PATH.lstrip("./"))
 
 def get_connection():
     conn = sqlite3.connect(SQLITE_PATH)
@@ -15,7 +20,8 @@ def get_connection():
 
 def init_db():
     conn = get_connection()
-    with open("schema.sql", "r") as f:
+    schema_path = os.path.join(ROOT_DIR, "schema.sql")
+    with open(schema_path, "r") as f:
         conn.executescript(f.read())
     conn.commit()
     conn.close()

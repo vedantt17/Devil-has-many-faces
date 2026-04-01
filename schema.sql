@@ -53,7 +53,6 @@ CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
     doc_id,
     page_num,
     text,
-    content='',
     tokenize='porter ascii'
 );
 

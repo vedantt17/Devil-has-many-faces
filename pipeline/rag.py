@@ -1,3 +1,4 @@
+# Written by V
 import os
 import sys
 import time
@@ -8,15 +9,14 @@ load_dotenv()
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 from backend.db.mongo_client import get_db
-from google import genai
-from google.genai import types
+from groq import Groq
 import chromadb
 from sentence_transformers import SentenceTransformer
 
 CHROMA_PATH = os.getenv("CHROMA_PATH", "./data/chroma_db")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+groq_client = Groq(api_key=GROQ_API_KEY)
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
 chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
 
@@ -29,7 +29,7 @@ def get_collection():
     )
 
 def chunk_text(text: str, chunk_size: int = 300, overlap: int = 50) -> list:
-    words = text    .split()
+    words = text.split()
     chunks = []
     i = 0
     while i < len(words):
@@ -147,8 +147,7 @@ def answer(query: str, corpus: str = None) -> dict:
         context += f"\n[Source {i+1}: {meta['filename']}, page {meta['page_num']}]\n"
         context += chunk["text"] + "\n"
 
-    prompt = f"""You are an analyst of declassified government documents.
-Answer the question using ONLY the provided source documents.
+    prompt = f"""Answer the question using ONLY the provided source documents.
 For every claim you make, cite the source number in brackets like [Source 1].
 If the answer is not in the documents, say "This information was not found in the available documents."
 Do not use any outside knowledge.
@@ -161,11 +160,22 @@ Sources:
 Answer:"""
 
     try:
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=[prompt]
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an analyst of declassified government documents. Answer questions using ONLY the provided source documents. Cite sources using [Source N] notation. If the answer is not in the documents, say so."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            max_tokens=1000,
+            temperature=0.1
         )
-        answer_text = response.text.strip()
+        answer_text = response.choices[0].message.content.strip()
     except Exception as e:
         answer_text = f"Error generating answer: {e}"
 

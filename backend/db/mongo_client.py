@@ -1,8 +1,10 @@
+# Written by V
 import os
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
-load_dotenv()
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(ROOT_DIR, ".env"))
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 DB_NAME = "devil_has_many_faces"
